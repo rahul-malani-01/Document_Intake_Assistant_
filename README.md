@@ -27,6 +27,134 @@ The project guarantees that the LLM acts purely as an extraction and reasoning e
 
 ---
 
+## 3. Architecture
+
+Document Intake Assistant
+|
+|-- Frontend (React + Vite)
+|      |
+|      |-- App.jsx
+|      |      (session management, application state, API coordination)
+|      |
+|      |-- components/Chat.jsx
+|      |      (chat messages, user input, loading and errors)
+|      |
+|      |-- components/StructuredState.jsx
+|      |      (captured fields, progress, direct editing)
+|      |
+|      |-- components/DocumentPreview.jsx
+|      |      (document preview, copy text, PDF download)
+|      |
+|      |-- services/api.js
+|             (HTTP requests to backend using fetch)
+|
+|                 REST API (JSON)
+|                         |
+|                         v
+|-- Backend (Node.js + Express)
+|      |
+|      |-- src/server.js
+|      |      (starts server and database connection)
+|      |
+|      |-- src/app.js
+|      |      (Express setup, middleware, routes)
+|      |
+|      |-- routes/conversation.routes.js
+|      |      (session, message and state endpoints)
+|      |
+|      |-- controllers/conversation.controller.js
+|      |      (handles HTTP requests and responses)
+|      |
+|      |-- services/conversation.service.js
+|      |      (orchestrates one conversation turn)
+|      |             |
+|      |             |-------------------------------|
+|      |             v                               v
+|      |      services/llm/                    models/
+|      |      |                                |
+|      |      |-- llm.factory.js               |-- Session.js
+|      |      |      (selects LLM service)      |-- Message.js
+|      |      |                                |-- DocumentState.js
+|      |      |-- gemini.service.js             |
+|      |      |      (Gemini API integration)   v
+|      |      |                           config/db.js
+|      |      |-- groq.service.js               (MongoDB connection)
+|      |      |      (Groq API integration)          |
+|      |      |                                     v
+|      |      |-- mock-llm.service.js        MongoDB
+|      |             (mock responses)        (sessions, messages,
+|      |                                      structured state)
+|      |
+|      |-- prompts/intake.prompt.js
+|      |      (instructions for extracting user information)
+|      |
+|      |-- schemas/llm-response.schema.js
+|      |      (validates expected LLM response structure)
+|      |
+|      |-- schemas/document.schema.js
+|      |      (validates structured document data)
+|      |
+|      |-- services/state.service.js
+|      |      (merges updates into structured state)
+|      |
+|      |-- services/document.service.js
+|      |      (structured state -> document text)
+|      |
+|      |-- middleware/error.middleware.js
+|      |      (centralized HTTP error handling)
+|
+|-- Document Generation
+|      |
+|      |-- Structured State
+|      |      (validated user information)
+|      |
+|      |-- Document Service
+|      |      (generates readable document content)
+|      |
+|      |-- DocumentPreview.jsx
+|             (live preview -> copy text / PDF export)
+|
+|-- Testing
+       |
+       |-- tests/conversation.api.test.js
+       |      (API behavior)
+       |
+       |-- tests/state.service.test.js
+       |      (state merging)
+       |
+       |-- tests/document.service.test.js
+       |      (document generation)
+       |
+       |-- tests/validation.test.js
+       |      (schema validation)
+       |
+       |-- tests/fixtures/llm-fixtures.js
+       |      (reusable test data)
+       |
+       |-- vitest.config.js
+              (test runner configuration)
+
+
+**Who decides what?**
+
+| Component | Responsibility |
+|---|---|
+| React frontend | Collects input and displays results |
+| Express routes | Maps HTTP requests to handlers |
+| Controller | Handles requests and responses |
+| Conversation service | Coordinates the chat workflow |
+| LLM service | Interprets messages and proposes updates |
+| Zod schemas | Validate expected data structures |
+| State service | Merges new information with existing state |
+| MongoDB models | Define stored data structures |
+| Document service | Generates document text from state |
+| DocumentPreview.jsx | Displays document and exports PDF |
+| Error middleware | Handles backend errors |
+| Vitest tests | Check expected application behavior |
+```
+
+
+
 ## imp for api
 generate api key at https://console.groq.com/keys
 
