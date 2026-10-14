@@ -27,130 +27,59 @@ The project guarantees that the LLM acts purely as an extraction and reasoning e
 
 ---
 
-## 3. Architecture
+## Architecture and Workflow
 
-Document Intake Assistant
-|
-|-- Frontend (React + Vite)
-|      |
-|      |-- App.jsx
-|      |      (session management, application state, API coordination)
-|      |
-|      |-- components/Chat.jsx
-|      |      (chat messages, user input, loading and errors)
-|      |
-|      |-- components/StructuredState.jsx
-|      |      (captured fields, progress, direct editing)
-|      |
-|      |-- components/DocumentPreview.jsx
-|      |      (document preview, copy text, PDF download)
-|      |
-|      |-- services/api.js
-|             (HTTP requests to backend using fetch)
-|
-|                 REST API (JSON)
-|                         |
-|                         v
-|-- Backend (Node.js + Express)
-|      |
-|      |-- src/server.js
-|      |      (starts server and database connection)
-|      |
-|      |-- src/app.js
-|      |      (Express setup, middleware, routes)
-|      |
-|      |-- routes/conversation.routes.js
-|      |      (session, message and state endpoints)
-|      |
-|      |-- controllers/conversation.controller.js
-|      |      (handles HTTP requests and responses)
-|      |
-|      |-- services/conversation.service.js
-|      |      (orchestrates one conversation turn)
-|      |             |
-|      |             |-------------------------------|
-|      |             v                               v
-|      |      services/llm/                    models/
-|      |      |                                |
-|      |      |-- llm.factory.js               |-- Session.js
-|      |      |      (selects LLM service)      |-- Message.js
-|      |      |                                |-- DocumentState.js
-|      |      |-- gemini.service.js             |
-|      |      |      (Gemini API integration)   v
-|      |      |                           config/db.js
-|      |      |-- groq.service.js               (MongoDB connection)
-|      |      |      (Groq API integration)          |
-|      |      |                                     v
-|      |      |-- mock-llm.service.js        MongoDB
-|      |             (mock responses)        (sessions, messages,
-|      |                                      structured state)
-|      |
-|      |-- prompts/intake.prompt.js
-|      |      (instructions for extracting user information)
-|      |
-|      |-- schemas/llm-response.schema.js
-|      |      (validates expected LLM response structure)
-|      |
-|      |-- schemas/document.schema.js
-|      |      (validates structured document data)
-|      |
-|      |-- services/state.service.js
-|      |      (merges updates into structured state)
-|      |
-|      |-- services/document.service.js
-|      |      (structured state -> document text)
-|      |
-|      |-- middleware/error.middleware.js
-|      |      (centralized HTTP error handling)
-|
-|-- Document Generation
-|      |
-|      |-- Structured State
-|      |      (validated user information)
-|      |
-|      |-- Document Service
-|      |      (generates readable document content)
-|      |
-|      |-- DocumentPreview.jsx
-|             (live preview -> copy text / PDF export)
-|
-|-- Testing
-       |
-       |-- tests/conversation.api.test.js
-       |      (API behavior)
-       |
-       |-- tests/state.service.test.js
-       |      (state merging)
-       |
-       |-- tests/document.service.test.js
-       |      (document generation)
-       |
-       |-- tests/validation.test.js
-       |      (schema validation)
-       |
-       |-- tests/fixtures/llm-fixtures.js
-       |      (reusable test data)
-       |
-       |-- vitest.config.js
-              (test runner configuration)
+The Document Intake Assistant follows a validation-first workflow. The user submits information through the React chat interface, and the backend uses an LLM to propose structured field updates. The proposed updates are validated before being merged into the stored state. Invalid, contradictory, or uncertain information is handled separately to avoid blindly accepting unreliable AI output. The validated state is stored in MongoDB and used to generate the document preview, which the user can review, edit, and export as a PDF.
 
-
-**Who decides what?**
-
-| Component | Responsibility |
-|---|---|
-| React frontend | Collects input and displays results |
-| Express routes | Maps HTTP requests to handlers |
-| Controller | Handles requests and responses |
-| Conversation service | Coordinates the chat workflow |
-| LLM service | Interprets messages and proposes updates |
-| Zod schemas | Validate expected data structures |
-| State service | Merges new information with existing state |
-| MongoDB models | Define stored data structures |
-| Document service | Generates document text from state |
-| DocumentPreview.jsx | Displays document and exports PDF |
-| Error middleware | Handles backend errors |
-| Vitest tests | Check expected application behavior |
+```mermaid
+flowchart LR
+    A["User Message"] --> B["React Chat Interface"]
+    B --> C["Express API<br/>Routes and Controller"]
+    C --> D["Conversation Service"]
+    
+    D --> E["Save Message<br/>Load Session and State"]
+    E --> F["LLM Factory"]
+    F --> G["Gemini / Groq / Mock LLM"]
+    G --> H["Structured Update Proposal<br/>Strict JSON"]
+    
+    H --> I{"Response Valid?"}
+    
+    I -->|Malformed or Provider Down| J["Retry or Try Another Provider<br/>Then Return Safe Reply"]
+    J --> D
+    
+    I -->|Wrong Type or Invalid Schema| K["Reject Update<br/>Ask User Again"]
+    I -->|Contradiction or Unclear Intent| L["Ask User for Clarification"]
+    I -->|Uncertain or Hedged Value| M["Keep Value Unconfirmed"]
+    
+    K --> N["Wait for User Response"]
+    L --> N
+    M --> O["Preserve Existing State<br/>Do Not Confirm Uncertain Value"]
+    N --> B
+    
+    I -->|Valid Update| P["State Service<br/>Validate and Merge"]
+    P --> Q[("MongoDB<br/>Session, Messages<br/>and Document State")]
+    
+    O --> Q
+    
+    Q --> R["Document Service<br/>Generate Document Text<br/>Pure Function, No LLM"]
+    R --> S["React Document Preview"]
+    S --> T["Review and Direct Editing"]
+    T -->|PATCH State API| C
+    S --> U["Copy Text / Export PDF<br/>Using jsPDF"]
+    
+    classDef frontend fill:#e8f1ff,stroke:#4776b8,color:#172b4d
+    classDef backend fill:#e8f5e9,stroke:#4d8c58,color:#183b20
+    classDef ai fill:#fff2d8,stroke:#c18b2b,color:#513b0b
+    classDef validation fill:#f3e8ff,stroke:#9060b5,color:#402451
+    classDef storage fill:#e0f2f1,stroke:#39877f,color:#153f3b
+    classDef recovery fill:#fff0ed,stroke:#c76a55,color:#63291d
+    
+    class A,B,S,T,U frontend
+    class C,D,E,F,P,R backend
+    class G,H ai
+    class I validation
+    class Q,O storage
+    class J,K,L,M,N recovery
 ```
 
 
